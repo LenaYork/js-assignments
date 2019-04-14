@@ -34,7 +34,27 @@
  *
  */
 function parseBankAccount(bankAccount) {
-    throw new Error('Not implemented');
+    const parts = [
+        [' _ ', '   ', ' _ ', ' _ ', '   ', ' _ ', ' _ ', ' _ ', ' _ ', ' _ '],
+        ['| |', '  |', ' _|', ' _|', '|_|', '|_ ', '|_ ', '  |', '|_|', '|_|'],
+        ['|_|', '  |', '|_ ', ' _|', '  |', ' _|', '|_|', '  |', '|_|', ' _|']
+    ];
+
+    let number = 0;
+    for (let i = 0; i < bankAccount.length / 3 - 1; i += 3) {
+        const digit = [bankAccount.slice(i, i + 3),
+            bankAccount.slice(i + 3 * 9 + 1, i + 3 * 10 + 1),
+            bankAccount.slice(i + 3 * 18 + 2, i + 3 * 19 + 2)];
+
+        for (let j = 0; j < parts[0].length; j++) {
+            if (parts[0][j] == digit[0] && parts[1][j] == digit[1] && parts[2][j] == digit[2]) {
+                number = number * 10 + j;
+                break;
+            }
+        }
+    }
+
+    return number;
 }
 
 
@@ -63,7 +83,28 @@ function parseBankAccount(bankAccount) {
  *                                                                                                'characters.'
  */
 function* wrapText(text, columns) {
-    throw new Error('Not implemented');
+    if (columns >= text.length) {
+        yield text;
+        text = '';
+    }
+
+    while (text.length) {
+        const column = text.slice(0, columns + 1);
+        const spaceIndex = column.lastIndexOf(' ');
+        if (spaceIndex == -1) {
+            const firstSpaceIndex = text.indexOf(' ');
+            if (firstSpaceIndex == -1) {
+                yield text;
+                text = '';
+            } else {
+                yield text.slice(0, firstSpaceIndex);
+                text = text.slice(firstSpaceIndex + 1);
+            }
+        } else {
+            yield text.slice(0, spaceIndex);
+            text = text.slice(spaceIndex + 1);
+        }
+    }
 }
 
 
@@ -100,7 +141,55 @@ const PokerRank = {
 }
 
 function getPokerHandRank(hand) {
-    throw new Error('Not implemented');
+    const getShape = card => card[card.length - 1];
+    const rankToNum = rank => isNaN(parseInt(rank)) ? (11 + ['J', 'Q', 'K', 'A'].indexOf(rank)) : parseInt(rank);
+    const getRank = card => rankToNum(card.length == 3 ? card.slice(0, 2) : card[0]);
+    const isSameShape = cards => cards.every(card => getShape(card) == getShape(cards[0]));
+
+    function countRanks(cards) {
+        const counters = Array.from({length: 13}, elem => 0);
+        for (let card of cards) {
+            counters[getRank(card) - 2]++;
+        }
+        return counters;
+    }
+
+    function isStraight (cards) {
+        const sorted = cards.map(card => getRank(card)).sort((a, b) => a - b);
+        if (sorted[0] == '2' && sorted[sorted.length - 1] == '14') {
+            sorted.unshift(sorted.pop());
+        }
+        for (let i = 1; i < sorted.length; i++) {
+            const diff = sorted[i] - sorted[i - 1];
+            if (diff != 1 && diff != -12) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    const ranks = countRanks(hand);
+    switch(true) {
+        case (isStraight(hand) && isSameShape(hand)):
+            return PokerRank.StraightFlush;
+        case (ranks.indexOf(4) != -1):
+            return PokerRank.FourOfKind;
+        case (ranks.indexOf(3) != -1 && ranks.indexOf(2) != -1):
+            return PokerRank.FullHouse;
+        case isSameShape(hand):
+            return PokerRank.Flush;
+        case isStraight(hand):
+            return PokerRank.Straight;
+        case ranks.indexOf(3) != -1:
+            return PokerRank.ThreeOfKind;
+        case ranks.indexOf(2) != -1 && ranks.lastIndexOf(2) != ranks.indexOf(2):
+            return PokerRank.TwoPairs;
+        case ranks.indexOf(2) != -1:
+            return PokerRank.OnePair;
+        default:
+            return PokerRank.HighCard;
+    }
 }
 
 
@@ -110,10 +199,10 @@ function getPokerHandRank(hand) {
  * The task is to break the figure in the rectangles it is made of.
  *
  * NOTE: The order of rectanles does not matter.
- * 
+ *
  * @param {string} figure
  * @return {Iterable.<string>} decomposition to basic parts
- * 
+ *
  * @example
  *
  *    '+------------+\n'+
@@ -135,7 +224,79 @@ function getPokerHandRank(hand) {
  *    '+-------------+\n'
  */
 function* getFigureRectangles(figure) {
-   throw new Error('Not implemented');
+    figure = figure.split('\n').slice(0, -1).map(line => line.split(''));
+
+    function deleteShape(y, x, width, height) {
+        for (let i = y; i < y + height - 1; i++) {
+            for (let j = x; j < x + width - 1; j++) {
+                figure[i][j] = ' ';
+            }
+        }
+
+        // for upper right corner of shape
+        let noCornersAbove = false;
+        let noCornersOnRight = x + width - 1 == figure[0].length - 1 || figure[y].slice(x + width).indexOf('+') == -1;
+
+        if (noCornersOnRight) {
+            for (let i = y; i < y + height - 1; i++) {
+                figure[i][x + width - 1] = ' ';
+            }
+            noCornersAbove = true;
+        }
+        if (y + height - 1 == figure.length - 1 || figure[y + height][x] == ' ') {
+            figure[y + height - 1][x] = ' ';
+        }
+
+        // for lower right corner of shape
+        noCornersOnRight = x + width - 1 == figure[0].length - 1 || figure[y + height - 1].slice(x + width).indexOf('+') == -1;
+        let noCornersBelow = true;
+        for (let i = y + height; noCornersBelow && i < figure.length; i++) {
+            if (figure[i][x + width - 1] == '+') {
+                noCornersBelow = false;
+            }
+        }
+
+        if (noCornersBelow && (noCornersOnRight || noCornersAbove)) {
+            figure[y + height - 1][x + width - 1] = ' ';
+        }
+    }
+
+    function createShape(width, height) {
+        const shape = Array.from({length: height});
+        for (let i = 0; i < height; i++) {
+            shape[i] = !i || i == height - 1 ?
+                '+' + Array.from({length: width - 2}, () => '-').join('') + '+' :
+                '|' + Array.from({length: width - 2}, () => ' ').join('') + '|';
+        }
+
+        shape[shape.length - 1] += '\n';
+        return shape.join('\n');
+    }
+
+    let width = 0;
+    let height = 0;
+    let hasShape = true;
+    while (hasShape) {
+        hasShape = false;
+
+        for (let i = 0; i < figure.length && !hasShape; i++) {
+            for (let j = 0; j < figure[0].length && !hasShape; j++) {
+                if (figure[i][j] == '+') {
+                    hasShape = true;
+
+                    width = figure[i].slice(j + 1).indexOf('+') + 2;
+                    let k = i + 1;
+                    while (k < figure.length && figure[k][j] != '+') {
+                        k++;
+                    }
+                    height = k - i + 1;
+
+                    deleteShape(i, j, width, height);
+                    yield createShape(width, height);
+                }
+            }
+        }
+    }
 }
 
 
